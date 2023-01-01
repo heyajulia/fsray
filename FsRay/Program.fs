@@ -66,16 +66,6 @@ type Scene =
       lights: Light list
       camera: Camera }
 
-let surface (thing: Thing) =
-    match thing with
-    | Sphere sphere -> sphere.surface
-    | Plane plane -> plane.surface
-
-let normal (thing: Thing) (pos: Vector3) =
-    match thing with
-    | Sphere sphere -> Vector3.Normalize(pos - sphere.center)
-    | Plane plane -> plane.normal
-
 let intersect (thing: Thing) (ray: Ray) =
     match thing with
     | Sphere sphere ->
@@ -89,25 +79,25 @@ let intersect (thing: Thing) (ray: Ray) =
             if disc >= 0f then
                 dist <- v - MathF.Sqrt(disc)
 
-        match dist with
-        | dist when dist = 0f -> None
-        | _ ->
+        if dist <> 0f then
             Some
                 { thing = thing
                   ray = ray
                   distance = dist }
+        else
+            None
     | Plane plane ->
         let denom = Vector3.Dot(plane.normal, ray.direction)
 
-        match denom with
-        | denom when denom > 0f -> None
-        | _ ->
+        if denom < 0f then
             let dist = (Vector3.Dot(plane.normal, ray.start) + plane.offset) / -denom
 
             Some
                 { thing = thing
                   ray = ray
                   distance = dist }
+        else
+            None
 
 let surfaces =
     {| shiny =
@@ -131,17 +121,26 @@ let surfaces =
                     0.7f
           roughness = 150f } |}
 
-
 let intersections (ray: Ray) (scene: Scene) =
     scene.things
     |> List.choose (fun thing -> intersect thing ray)
     |> List.sortBy (fun i -> i.distance)
     |> List.tryHead
 
-let testRay (ray: Ray) (scene: Scene) =
-    Option.map (fun i -> i.distance) (intersections ray scene)
-
 let rec shade (isect: Intersection) (scene: Scene) (depth: int) =
+    let surface (thing: Thing) =
+        match thing with
+        | Sphere sphere -> sphere.surface
+        | Plane plane -> plane.surface
+
+    let normal (thing: Thing) (pos: Vector3) =
+        match thing with
+        | Sphere sphere -> Vector3.Normalize(pos - sphere.center)
+        | Plane plane -> plane.normal
+
+    let testRay (ray: Ray) (scene: Scene) =
+        Option.map (fun i -> i.distance) (intersections ray scene)
+
     let getReflectionColor thing pos reflectDir scene depth =
         let surface = surface thing
         let reflectance = surface.reflect pos
@@ -153,30 +152,21 @@ let rec shade (isect: Intersection) (scene: Scene) (depth: int) =
             let ldis = light.position - pos
             let livec = Vector3.Normalize(ldis)
             let neatIsect = testRay { start = pos; direction = livec } scene
-
-            let isInShadow =
-                match neatIsect with
-                | Some thing -> thing <= ldis.Length()
-                | None -> false
+            let isInShadow = Option.exists (fun thing -> thing <= ldis.Length()) neatIsect
 
             if isInShadow then
                 col
             else
                 let illum = Vector3.Dot(livec, normal)
-
-                let lcolor =
-                    match illum with
-                    | illum when illum > 0f -> light.color * illum
-                    | _ -> black
-
+                let lcolor = if illum > 0f then light.color * illum else black
                 let specular = Vector3.Dot(livec, Vector3.Normalize(rd))
-
                 let surface = surface thing
 
                 let scolor =
-                    match specular with
-                    | specular when specular > 0f -> light.color * (specular ** surface.roughness)
-                    | _ -> black
+                    if specular > 0f then
+                        light.color * (specular ** surface.roughness)
+                    else
+                        black
 
                 col + (surface.diffuse pos * lcolor) + (surface.specular pos * scolor)
 
@@ -201,9 +191,8 @@ let rec shade (isect: Intersection) (scene: Scene) (depth: int) =
 and traceRay (ray: Ray) (scene: Scene) (depth: int) : Color =
     let isect = intersections ray scene
 
-    match isect with
-    | None -> background
-    | Some isect -> shade isect scene depth
+    Option.map (fun isect -> shade isect scene depth) isect
+    |> Option.defaultValue background
 
 let render (scene: Scene) (width: int) (height: int) =
     let fw = float32 width
@@ -231,19 +220,17 @@ let render (scene: Scene) (width: int) (height: int) =
     for y in 0 .. height - 1 do
         let fy = float32 y
 
-        for x in 0 .. width - 1 do
-            let fx = float32 x
-
-            let color =
-                traceRay
-                    { start = scene.camera.pos
-                      direction = getPoint fx fy }
-                    scene
-                    0
-
-            let r, g, b = toDrawingColor color
-
-            printfn $"%d{r} %d{g} %d{b}"
+        seq { 0 .. width - 1 }
+        |> Seq.map float32
+        |> Seq.map (fun fx -> getPoint fx fy)
+        |> Seq.map (fun point ->
+            traceRay
+                { start = scene.camera.pos
+                  direction = point }
+                scene
+                0)
+        |> Seq.map toDrawingColor
+        |> Seq.iter (fun (r, g, b) -> printfn $"%d{r} %d{g} %d{b}")
 
 [<EntryPoint>]
 let main _ =
@@ -272,6 +259,6 @@ let main _ =
                 color = Color(0.21f, 0.21f, 0.35f) } ]
           camera = mkCamera (Vector3(3f, 2f, 4f)) (Vector3(-1f, 0.5f, 0f)) }
 
-    render defaultScene 1024 1024
+    render defaultScene 256 256
 
     0
