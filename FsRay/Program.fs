@@ -217,20 +217,17 @@ let render (scene: Scene) (width: int) (height: int) =
 
     printfn $"P3\n%d{width} %d{height}\n255\n"
 
-    for y in 0 .. height - 1 do
-        let fy = float32 y
-
-        seq { 0 .. width - 1 }
-        |> Seq.map float32
-        |> Seq.map (fun fx -> getPoint fx fy)
-        |> Seq.map (fun point ->
-            traceRay
-                { start = scene.camera.pos
-                  direction = point }
-                scene
-                0)
-        |> Seq.map toDrawingColor
-        |> Seq.iter (fun (r, g, b) -> printfn $"%d{r} %d{g} %d{b}")
+    Seq.allPairs { 0 .. height - 1 } { 0 .. width - 1 }
+    |> Seq.map (fun (y, x) -> float32 x, float32 y)
+    |> Seq.map (fun (fx, fy) -> getPoint fx fy)
+    |> Seq.map (fun point ->
+        traceRay
+            { start = scene.camera.pos
+              direction = point }
+            scene
+            0)
+    |> Seq.map toDrawingColor
+    |> Seq.iter (fun (r, g, b) -> printfn $"%d{r} %d{g} %d{b}")
 
 [<EntryPoint>]
 let main _ =
