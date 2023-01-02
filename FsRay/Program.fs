@@ -40,15 +40,9 @@ type Surface =
       reflect: Color -> float32
       roughness: float32 }
 
-type Sphere =
-    { center: Vector3
-      radius: float32
-      surface: Surface }
+type Sphere = { center: Vector3; radius: float32 }
 
-type Plane =
-    { normal: Vector3
-      offset: float32
-      surface: Surface }
+type Plane = { normal: Vector3; offset: float32 }
 
 type Intersection =
     { thing: Thing
@@ -56,8 +50,13 @@ type Intersection =
       distance: float32 }
 
 and Thing =
-    | Sphere of Sphere
-    | Plane of Plane
+    | Sphere of Sphere * Surface
+    | Plane of Plane * Surface
+
+    member this.surface =
+        match this with
+        | Sphere(_, surface) -> surface
+        | Plane(_, surface) -> surface
 
 type Light = { position: Vector3; color: Color }
 
@@ -68,7 +67,7 @@ type Scene =
 
 let intersect (thing: Thing) (ray: Ray) =
     match thing with
-    | Sphere sphere ->
+    | Sphere(sphere, _) ->
         let eo = sphere.center - ray.start
         let v = Vector3.Dot(eo, ray.direction)
         let mutable dist = 0f
@@ -77,7 +76,7 @@ let intersect (thing: Thing) (ray: Ray) =
             let disc = sphere.radius ** 2f - (Vector3.Dot(eo, eo) - v ** 2f)
 
             if disc >= 0f then
-                dist <- v - MathF.Sqrt(disc)
+                dist <- v - sqrt disc
 
         if dist <> 0f then
             Some
@@ -86,7 +85,7 @@ let intersect (thing: Thing) (ray: Ray) =
                   distance = dist }
         else
             None
-    | Plane plane ->
+    | Plane(plane, _) ->
         let denom = Vector3.Dot(plane.normal, ray.direction)
 
         if denom < 0f then
@@ -108,14 +107,14 @@ let surfaces =
        checkerboard =
         { diffuse =
             fun pos ->
-                if (MathF.Floor(pos.Z) + MathF.Floor(pos.X)) % 2f <> 0f then
+                if (floor pos.Z + floor pos.X) % 2f <> 0f then
                     white
                 else
                     black
           specular = fun _ -> white
           reflect =
             fun pos ->
-                if (MathF.Floor(pos.Z) + MathF.Floor(pos.X)) % 2f <> 0f then
+                if (floor pos.Z + floor pos.X) % 2f <> 0f then
                     0.1f
                 else
                     0.7f
@@ -128,27 +127,22 @@ let intersections (ray: Ray) (scene: Scene) =
     |> List.tryHead
 
 let rec shade (isect: Intersection) (scene: Scene) (depth: int) =
-    let surface (thing: Thing) =
-        match thing with
-        | Sphere sphere -> sphere.surface
-        | Plane plane -> plane.surface
-
     let normal (thing: Thing) (pos: Vector3) =
         match thing with
-        | Sphere sphere -> Vector3.Normalize(pos - sphere.center)
-        | Plane plane -> plane.normal
+        | Sphere(sphere, _) -> Vector3.Normalize(pos - sphere.center)
+        | Plane(plane, _) -> plane.normal
 
     let testRay (ray: Ray) (scene: Scene) =
         Option.map (fun i -> i.distance) (intersections ray scene)
 
-    let getReflectionColor thing pos reflectDir scene depth =
-        let surface = surface thing
+    let getReflectionColor (thing: Thing) (pos: Color) (reflectDir: Vector3) (scene: Scene) (depth: int) =
+        let surface = thing.surface
         let reflectance = surface.reflect pos
 
         reflectance * traceRay { start = pos; direction = reflectDir } scene (depth + 1)
 
-    let getNaturalColor thing pos normal rd scene =
-        let addLight col light =
+    let getNaturalColor (thing: Thing) (pos: Vector3) (normal: Vector3) (rd: Vector3) (scene: Scene) =
+        let addLight (col: Vector3) (light: Light) =
             let ldis = light.position - pos
             let livec = Vector3.Normalize(ldis)
             let neatIsect = testRay { start = pos; direction = livec } scene
@@ -160,7 +154,7 @@ let rec shade (isect: Intersection) (scene: Scene) (depth: int) =
                 let illum = Vector3.Dot(livec, normal)
                 let lcolor = if illum > 0f then light.color * illum else black
                 let specular = Vector3.Dot(livec, Vector3.Normalize(rd))
-                let surface = surface thing
+                let surface = thing.surface
 
                 let scolor =
                     if specular > 0f then
@@ -189,16 +183,15 @@ let rec shade (isect: Intersection) (scene: Scene) (depth: int) =
     naturalColor + reflectedColor
 
 and traceRay (ray: Ray) (scene: Scene) (depth: int) : Color =
-    let isect = intersections ray scene
-
-    Option.map (fun isect -> shade isect scene depth) isect
+    intersections ray scene
+    |> Option.map (fun isect -> shade isect scene depth)
     |> Option.defaultValue background
 
 let render (scene: Scene) (width: int) (height: int) =
     let fw = float32 width
     let fh = float32 height
 
-    let getPoint x y =
+    let getPoint (x: float32) (y: float32) =
         let recenterX x = (x - fw / 2f) / 2f / fw
 
         let recenterY y = -(y - fh / 2f) / 2f / fh
@@ -209,11 +202,10 @@ let render (scene: Scene) (width: int) (height: int) =
         )
 
     let toDrawingColor (color: Color) =
-        let legalize d = Math.Clamp(d, 0f, 1f)
+        let clamp d = Math.Clamp(d, 0f, 1f)
+        let floorInt = floor >> int
 
-        MathF.Floor(legalize color.X * 255f) |> int,
-        MathF.Floor(legalize color.Y * 255f) |> int,
-        MathF.Floor(legalize color.Z * 255f) |> int
+        floorInt (clamp color.X * 255f), floorInt (clamp color.Y * 255f), floorInt (clamp color.Z * 255f)
 
     printfn $"P3\n%d{width} %d{height}\n255\n"
 
@@ -233,18 +225,21 @@ let render (scene: Scene) (width: int) (height: int) =
 let main _ =
     let defaultScene =
         { things =
-            [ Plane
+            [ Plane(
                   { normal = Vector3(0f, 1f, 0f)
-                    offset = 0f
-                    surface = surfaces.checkerboard }
-              Sphere
+                    offset = 0f },
+                  surfaces.checkerboard
+              )
+              Sphere(
                   { center = Vector3(0f, 1f, -0.25f)
-                    radius = 1f
-                    surface = surfaces.shiny }
-              Sphere
+                    radius = 1f },
+                  surfaces.shiny
+              )
+              Sphere(
                   { center = Vector3(-1f, 0.5f, 1.5f)
-                    radius = 0.5f
-                    surface = surfaces.shiny } ]
+                    radius = 0.5f },
+                  surfaces.shiny
+              ) ]
           lights =
             [ { position = Vector3(-2f, 2.5f, 0f)
                 color = Color(0.49f, 0.07f, 0.07f) }
