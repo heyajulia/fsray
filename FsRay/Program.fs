@@ -202,10 +202,10 @@ let render (scene: Scene) (width: int) (height: int) =
         )
 
     let toDrawingColor (color: Color) =
-        let clamp d = Math.Clamp(d, 0f, 1f)
-        let floorInt = floor >> int
+        let clamp value = Math.Clamp(value, 0f, 1f)
+        let p = clamp >> (*) 255f >> floor >> int
 
-        floorInt (clamp color.X * 255f), floorInt (clamp color.Y * 255f), floorInt (clamp color.Z * 255f)
+        p color.X, p color.Y, p color.Z
 
     printfn $"P3\n%d{width} %d{height}\n255\n"
 
