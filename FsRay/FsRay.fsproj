@@ -6,6 +6,8 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Color.fs"/>
+        <Compile Include="Surface.fs"/>
         <Compile Include="Program.fs"/>
     </ItemGroup>
 
