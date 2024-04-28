@@ -86,7 +86,7 @@ module Program =
     let intersections (ray: Ray) (scene: Scene) =
         scene.things
         |> List.choose (fun thing -> intersect thing ray)
-        |> List.sortBy (fun i -> i.distance)
+        |> List.sortBy _.distance
         |> List.tryHead
 
     let rec shade (isect: Intersection) (scene: Scene) (depth: int) =
@@ -96,7 +96,7 @@ module Program =
             | Plane(plane, _) -> plane.normal
 
         let testRay (ray: Ray) (scene: Scene) =
-            Option.map (fun i -> i.distance) (intersections ray scene)
+            Option.map _.distance (intersections ray scene)
 
         let getReflectionColor (thing: Thing) (pos: Color) (reflectDir: Vector3) (scene: Scene) (depth: int) =
             let surface = thing.surface

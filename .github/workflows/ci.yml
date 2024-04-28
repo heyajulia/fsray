@@ -10,11 +10,9 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/setup-dotnet@v3
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 7.x
-      - run: dotnet restore
-      - run: dotnet build --no-restore
-      - run: dotnet FsRay/bin/Debug/net7.0/FsRay.dll > image.ppm
+          dotnet-version: 8.x
+      - run: dotnet run --project FsRay/FsRay.fsproj > image.ppm
       - run: echo "4a7e8d1be0976dca453a148e5b98b03d943245d82c43c28237062861e1edacee  image.ppm" | sha256sum --check

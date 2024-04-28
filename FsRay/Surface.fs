@@ -7,10 +7,12 @@ type Surface =
       roughness: float32 }
 
 module Surface =
+    let private always x = fun _ -> x
+
     let shiny =
-        { diffuse = fun _ -> Color.white
-          specular = fun _ -> Color(0.5f)
-          reflect = (fun _ -> 0.7f)
+        { diffuse = always Color.white
+          specular = always Color.grey
+          reflect = always 0.7f
           roughness = 250f }
 
     let checkerboard =
@@ -20,7 +22,7 @@ module Surface =
                     Color.white
                 else
                     Color.black
-          specular = fun _ -> Color.white
+          specular = always Color.white
           reflect =
             fun pos ->
                 if (floor pos.Z + floor pos.X) % 2f <> 0f then
