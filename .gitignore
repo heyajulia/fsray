@@ -1,4 +1,5 @@
-image.*
+*.ppm
+!golden.ppm
 !static/*
 
 # Created by https://www.toptal.com/developers/gitignore/api/macos,visualstudiocode,jetbrains+all,dotnetcore,fsharp

@@ -1,27 +1,23 @@
 namespace FsRay
 
 open System
+open System.IO
 open System.Numerics
+open System.Text
 
 module Program =
     let maxDepth = 5
 
-    type Camera =
-        { forward: Vector3
-          right: Vector3
-          up: Vector3
-          pos: Vector3 }
-
-    let mkCamera (pos: Vector3) (lookAt: Vector3) =
+    type Camera(pos: Vector3, lookAt: Vector3) =
         let down = -Vector3.UnitY
         let forward = Vector3.Normalize(lookAt - pos)
         let right = 1.5f * Vector3.Normalize(Vector3.Cross(forward, down))
         let up = 1.5f * Vector3.Normalize(Vector3.Cross(forward, right))
-
-        { forward = forward
-          right = right
-          up = up
-          pos = pos }
+        
+        member _.Forward = forward
+        member _.Right = right
+        member _.Up = up
+        member _.Pos = pos
 
     type Ray = { start: Vector3; direction: Vector3 }
 
@@ -33,10 +29,9 @@ module Program =
         | Sphere of Sphere * Surface
         | Plane of Plane * Surface
 
-        member this.surface =
+        member this.Surface =
             match this with
-            | Sphere(_, surface) -> surface
-            | Plane(_, surface) -> surface
+            | Sphere(_, surface) | Plane(_, surface) -> surface
 
     type Intersection =
         { thing: Thing
@@ -99,7 +94,7 @@ module Program =
             Option.map _.distance (intersections ray scene)
 
         let getReflectionColor (thing: Thing) (pos: Color) (reflectDir: Vector3) (scene: Scene) (depth: int) =
-            let surface = thing.surface
+            let surface = thing.Surface
             let reflectance = surface.reflect pos
 
             reflectance * traceRay { start = pos; direction = reflectDir } scene (depth + 1)
@@ -117,7 +112,7 @@ module Program =
                     let illum = Vector3.Dot(livec, normal)
                     let lcolor = if illum > 0f then light.color * illum else Color.black
                     let specular = Vector3.Dot(livec, Vector3.Normalize(rd))
-                    let surface = thing.surface
+                    let surface = thing.Surface
 
                     let scolor =
                         if specular > 0f then
@@ -125,7 +120,7 @@ module Program =
                         else
                             Color.black
 
-                    col + (surface.diffuse pos * lcolor) + (surface.specular pos * scolor)
+                    col + (surface.diffuse pos * lcolor) + (surface.specular * scolor)
 
             List.fold addLight Color.black scene.lights
 
@@ -160,36 +155,40 @@ module Program =
             let recenterY y = -(y - fh / 2f) / 2f / fh
 
             Vector3.Normalize(
-                scene.camera.forward
-                + (recenterX x * scene.camera.right + recenterY y * scene.camera.up)
+                scene.camera.Forward
+                + (recenterX x * scene.camera.Right + recenterY y * scene.camera.Up)
             )
 
         let toDrawingColor (color: Color) =
             let clamp value = Math.Clamp(value, 0f, 1f)
-            let p = clamp >> (*) 255f >> floor >> int
+            let f = clamp >> (*) 255f >> floor >> byte
 
-            p color.X, p color.Y, p color.Z
+            f color.X, f color.Y, f color.Z
 
-        printfn $"P3\n%d{width} %d{height}\n255\n"
+        use output = File.Open("image.ppm", FileMode.Create)
 
-        Seq.allPairs { 0 .. height - 1 } { 0 .. width - 1 }
-        |> Seq.map (fun (y, x) -> float32 x, float32 y)
-        |> Seq.map (fun (fx, fy) -> getPoint fx fy)
+        output.Write(Encoding.ASCII.GetBytes($"P6\n%d{width} %d{height}\n255\n"))
+
+        Seq.allPairs (seq { 0 .. height - 1 }) (seq { 0 .. width - 1 })
+        |> Seq.map (fun (y, x) -> getPoint (float32 x) (float32 y))
         |> Seq.map (fun point ->
             traceRay
-                { start = scene.camera.pos
+                { start = scene.camera.Pos
                   direction = point }
                 scene
                 0)
         |> Seq.map toDrawingColor
-        |> Seq.iter (fun (r, g, b) -> printfn $"%d{r} %d{g} %d{b}")
+        |> Seq.iter (fun (r, g, b) ->
+            output.WriteByte(r)
+            output.WriteByte(g)
+            output.WriteByte(b))
 
     [<EntryPoint>]
     let main _ =
         let defaultScene =
             { things =
                 [ Plane(
-                      { normal = Vector3(0f, 1f, 0f)
+                      { normal = Vector3.UnitY
                         offset = 0f },
                       Surface.checkerboard
                   )
@@ -212,7 +211,7 @@ module Program =
                     color = Color(0.07f, 0.49f, 0.071f) }
                   { position = Vector3(0f, 3.5f, 0f)
                     color = Color(0.21f, 0.21f, 0.35f) } ]
-              camera = mkCamera (Vector3(3f, 2f, 4f)) (Vector3(-1f, 0.5f, 0f)) }
+              camera = Camera (Vector3(3f, 2f, 4f), Vector3(-1f, 0.5f, 0f)) }
 
         render defaultScene 256 256
 

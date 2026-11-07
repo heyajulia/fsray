@@ -1,18 +1,40 @@
 name: CI
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
         with:
-          dotnet-version: 8.x
-      - run: dotnet run --project FsRay/FsRay.fsproj > image.ppm
-      - run: echo "4a7e8d1be0976dca453a148e5b98b03d943245d82c43c28237062861e1edacee  image.ppm" | sha256sum --check
+          dotnet-version: 10.x
+      - run: sudo apt-get update && sudo apt-get install -y imagemagick
+      - run: dotnet run -c Release --project FsRay/FsRay.fsproj
+      - name: Compare render
+        id: compare
+        run: |
+          if magick compare -metric AE golden.ppm image.ppm diff.png 2> metric.txt; then
+            echo "✅ Render matches reference." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### ❌ Render regression" >> "$GITHUB_STEP_SUMMARY"
+            echo "Differing pixels: $(cat metric.txt)" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+      - name: Upload visual diff
+        if: failure() && steps.compare.outcome == 'failure'
+        id: diff
+        uses: actions/upload-artifact@v7
+        with:
+          path: diff.png
+          archive: false
+          if-no-files-found: error
+      - name: Link visual diff
+        if: failure() && steps.diff.outcome == 'success'
+        env:
+          ARTIFACT_URL: ${{ steps.diff.outputs.artifact-url }}
+        run: |
+          echo "[View render diff]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
