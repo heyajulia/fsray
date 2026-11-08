@@ -13,7 +13,7 @@ module Program =
         let forward = Vector3.Normalize(lookAt - pos)
         let right = 1.5f * Vector3.Normalize(Vector3.Cross(forward, down))
         let up = 1.5f * Vector3.Normalize(Vector3.Cross(forward, right))
-        
+
         member _.Forward = forward
         member _.Right = right
         member _.Up = up
@@ -31,7 +31,8 @@ module Program =
 
         member this.Surface =
             match this with
-            | Sphere(_, surface) | Plane(_, surface) -> surface
+            | Sphere(_, surface)
+            | Plane(_, surface) -> surface
 
     type Intersection =
         { thing: Thing
@@ -187,11 +188,7 @@ module Program =
     let main _ =
         let defaultScene =
             { things =
-                [ Plane(
-                      { normal = Vector3.UnitY
-                        offset = 0f },
-                      Surface.checkerboard
-                  )
+                [ Plane({ normal = Vector3.UnitY; offset = 0f }, Surface.checkerboard)
                   Sphere(
                       { center = Vector3(0f, 1f, -0.25f)
                         radius = 1f },
@@ -211,7 +208,7 @@ module Program =
                     color = Color(0.07f, 0.49f, 0.071f) }
                   { position = Vector3(0f, 3.5f, 0f)
                     color = Color(0.21f, 0.21f, 0.35f) } ]
-              camera = Camera (Vector3(3f, 2f, 4f), Vector3(-1f, 0.5f, 0f)) }
+              camera = Camera(Vector3(3f, 2f, 4f), Vector3(-1f, 0.5f, 0f)) }
 
         render defaultScene 256 256
 

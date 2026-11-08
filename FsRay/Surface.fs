@@ -9,9 +9,9 @@ type Surface =
       roughness: float32 }
 
 module Surface =
-    let private always x _ = x
-
     let shiny =
+        let always x _ = x
+
         { diffuse = always Color.white
           specular = Color.grey
           reflect = always 0.7f
